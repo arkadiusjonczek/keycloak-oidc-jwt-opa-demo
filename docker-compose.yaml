@@ -1,0 +1,50 @@
+version: "3"
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    command:
+      - "start-dev"
+      - "--import-realm"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./demo-realm.json:/opt/keycloak/data/import/demo-realm.json
+    ports:
+      - "8080:8080"
+    networks:
+      - internal
+  opa:
+    image: openpolicyagent/opa:0.54.0-rootless
+    command:
+      - "run"
+      - "--server"
+      - "--log-level=debug"
+      - "--log-format=json-pretty"
+      - "--set=decision_logs.console=true"
+      - "--set=services.nginx.url=http://nginx"
+      - "--set=bundles.nginx.service=nginx"
+      - "--set=bundles.nginx.resource=bundles/demo.tar.gz"
+      - "--set=bundles.nginx.polling.min_delay_seconds=10"
+      - "--set=bundles.nginx.polling.max_delay_seconds=30"
+    environment:
+      JWKS_URL: http://keycloak:8080/realms/demo/protocol/openid-connect/certs
+    ports:
+      - "8181:8181"
+    networks:
+      - internal
+    depends_on:
+      - keycloak
+      - nginx
+  nginx:
+    image: nginx:1.25.1-alpine
+    ports:
+      - "8888:80"
+    networks:
+      - internal
+    volumes:
+      - ./bundles:/usr/share/nginx/html/bundles
+
+networks:
+  internal:
